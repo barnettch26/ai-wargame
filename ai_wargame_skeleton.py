@@ -323,6 +323,28 @@ class Game:
             if unit.player == Player.Defender and (coords.dst.row < coords.src.row or coords.dst.col < coords.src.col):
                 return False
 
+        top = Coord(coords.src.row-1, coords.src.col)
+        bottom = Coord(coords.src.row+1, coords.src.col)
+        left = Coord(coords.src.row, coords.src.col-1)
+        right = Coord(coords.src.row, coords.src.col+1)
+
+        top_unit = self.get(top)
+        bottom_unit = self.get(bottom)
+        left_unit = self.get(left)
+        right_unit = self.get(right)
+
+        in_combat = False
+
+        if (top_unit is not None and top_unit.player != self.next_player)\
+                or (bottom_unit is not None and bottom_unit.player != self.next_player)\
+                or (left_unit is not None and left_unit.player != self.next_player)\
+                or (right_unit is not None and right_unit.player != self.next_player):
+            in_combat = True
+
+        if (in_combat
+                and (unit.type == UnitType.AI or unit.type == UnitType.Firewall or unit.type == UnitType.Program)):
+            return False
+
         unit = self.get(coords.dst)
         return (unit is None)
 
