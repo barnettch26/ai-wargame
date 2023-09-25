@@ -316,6 +316,13 @@ class Game:
         unit = self.get(coords.src)
         if unit is None or unit.player != self.next_player:
             return False
+
+        if unit.type == UnitType.AI or unit.type == UnitType.Firewall or unit.type == UnitType.Program:
+            if unit.player == Player.Attacker and (coords.dst.row > coords.src.row or coords.dst.col > coords.src.col):
+                return False
+            if unit.player == Player.Defender and (coords.dst.row < coords.src.row or coords.dst.col < coords.src.col):
+                return False
+
         unit = self.get(coords.dst)
         return (unit is None)
 
