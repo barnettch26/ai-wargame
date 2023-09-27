@@ -309,7 +309,7 @@ class Game:
             target.mod_health(health_delta)
             self.remove_dead(coord)
 
-    def is_valid_move(self, coords : CoordPair) -> bool:
+    def is_valid_movement(self, coords : CoordPair) -> bool:
         """Validate a move expressed as a CoordPair. TODO: WRITE MISSING CODE!!!"""
         if not self.is_valid_coord(coords.src) or not self.is_valid_coord(coords.dst):
             return False
@@ -317,43 +317,107 @@ class Game:
         if unit is None or unit.player != self.next_player:
             return False
 
+        target_coords = coords.dst
+        all_adjacent_coords = coords.src.iter_adjacent()
+        is_destination_adjacent = False
+
+        for adjacent_coordinate in all_adjacent_coords:
+            # Check if the target coordinates corresponds to one of the adjacent coordinates
+            if adjacent_coordinate.row == target_coords.row and adjacent_coordinate.col == target_coords.col:
+                is_destination_adjacent = True
+                break
+
+        # The source and destination must be adjacent
+        if not is_destination_adjacent:
+            return False
+
+        in_combat = self.is_engaged_in_combat(coords)
+
+        # AI, Firewall and Program units cannot move when engaged in combat (adjacent with adversarial unit)
+        if (in_combat
+                and (unit.type == UnitType.AI or unit.type == UnitType.Firewall or unit.type == UnitType.Program)):
+            return False
+
         if unit.type == UnitType.AI or unit.type == UnitType.Firewall or unit.type == UnitType.Program:
+            # Attacker's AI, Firewall and Program cannot move down or right
             if unit.player == Player.Attacker and (coords.dst.row > coords.src.row or coords.dst.col > coords.src.col):
                 return False
+            # Defender's AI, Firewall and Program cannot move up or left
             if unit.player == Player.Defender and (coords.dst.row < coords.src.row or coords.dst.col < coords.src.col):
                 return False
 
-        top = Coord(coords.src.row-1, coords.src.col)
-        bottom = Coord(coords.src.row+1, coords.src.col)
-        left = Coord(coords.src.row, coords.src.col-1)
-        right = Coord(coords.src.row, coords.src.col+1)
+        unit = self.get(coords.dst)
+        return unit is None
+
+    def is_engaged_in_combat(self, coords: CoordPair) -> bool:
+        """Determines if the source unit is adjacent to any adversarial unit"""
+        top = Coord(coords.src.row - 1, coords.src.col)
+        bottom = Coord(coords.src.row + 1, coords.src.col)
+        left = Coord(coords.src.row, coords.src.col - 1)
+        right = Coord(coords.src.row, coords.src.col + 1)
 
         top_unit = self.get(top)
         bottom_unit = self.get(bottom)
         left_unit = self.get(left)
         right_unit = self.get(right)
 
-        in_combat = False
-
-        if (top_unit is not None and top_unit.player != self.next_player)\
-                or (bottom_unit is not None and bottom_unit.player != self.next_player)\
-                or (left_unit is not None and left_unit.player != self.next_player)\
+        if (top_unit is not None and top_unit.player != self.next_player) \
+                or (bottom_unit is not None and bottom_unit.player != self.next_player) \
+                or (left_unit is not None and left_unit.player != self.next_player) \
                 or (right_unit is not None and right_unit.player != self.next_player):
-            in_combat = True
+            return True
 
-        if (in_combat
-                and (unit.type == UnitType.AI or unit.type == UnitType.Firewall or unit.type == UnitType.Program)):
+        return False
+
+    def is_valid_attack(self, coords : CoordPair) -> bool:
+        """An attack move is only valid if T is adjacent to S (up, down, left, right).
+        T and S must be adversarial units"""
+        if not self.is_valid_coord(coords.src) or not self.is_valid_coord(coords.dst):
+            return False
+        unit = self.get(coords.src)
+        if unit is None or unit.player != self.next_player:
             return False
 
-        unit = self.get(coords.dst)
-        return (unit is None)
+        target_coords = coords.dst
+        all_adjacent_coords = coords.src.iter_adjacent()
+
+        for adjacent_coordinate in all_adjacent_coords:
+            # Check if the target coordinates corresponds to one of the adjacent coordinates
+            if adjacent_coordinate.row == target_coords.row and adjacent_coordinate.col == target_coords.col:
+                target_unit = self.get(target_coords)
+                source_unit = self.get(coords.src)
+
+                if target_unit is None or source_unit is None:
+                    continue
+
+                # Check that T and S are adversarial units
+                if source_unit.player != target_unit.player:
+                    return True
+
+        return False
 
     def perform_move(self, coords : CoordPair) -> Tuple[bool,str]:
-        """Validate and perform a move expressed as a CoordPair. TODO: WRITE MISSING CODE!!!"""
-        if self.is_valid_move(coords):
+        """Validate and perform a movement or attack or repair or self-destruct expressed as a CoordPair.
+        TODO: WRITE MISSING CODE!!!"""
+
+        if self.is_valid_movement(coords):
             self.set(coords.dst,self.get(coords.src))
             self.set(coords.src,None)
+
             return (True,"")
+
+        if self.is_valid_attack(coords):
+            source_unit = self.get(coords.src)
+            target_unit = self.get(coords.dst)
+
+            source_to_target_damage = source_unit.damage_amount(target_unit)
+            target_to_source_damage = target_unit.damage_amount(source_unit)
+
+            self.mod_health(coords.src, -target_to_source_damage)
+            self.mod_health(coords.dst, -source_to_target_damage)
+
+            return (True, "")
+
         return (False,"invalid move")
 
     def next_turn(self):
