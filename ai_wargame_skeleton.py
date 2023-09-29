@@ -396,6 +396,47 @@ class Game:
 
         return False
 
+    def is_valid_repair(self, coords: CoordPair) -> bool:
+        if not self.is_valid_coord(coords.src) or not self.is_valid_coord(coords.dst):
+            return False
+        src_unit = self.get(coords.src)
+        if src_unit is None or src_unit.player != self.next_player:
+            return False
+
+        adj_coords = coords.src.iter_adjacent()
+        for adj_coord in adj_coords:
+            if coords.dst.to_string() == adj_coord.to_string():
+                target_unit = self.get(coords.dst)
+
+                #Must be valid target that has taken dmg
+                if target_unit is None or not self.next_player or target_unit.health == 9:
+                    return False
+                #Check if healable
+                if src_unit.repair_amount(target_unit) == 0:
+                    return False
+                return True
+
+        return False
+
+    def is_valid_self_destruct(self, coords: CoordPair) -> bool:
+        #Make sure not controlling other players units
+        unit = self.get(coords.src)
+        if unit is None or unit.player != self.next_player:
+            return False
+        #Self destruct only if src and dst are same
+        if coords.src != coords.dst:
+            return False
+        return True
+
+    def self_destruct_unit(self, coord: Coord):
+        surrounding_coords = coord.iter_range(1)
+        for target_coord in surrounding_coords:
+            if target_coord == coord:
+                #Instant kill self
+                self.mod_health(target_coord, -9)
+            #Will take care of None check for us
+            self.mod_health(target_coord, -2)
+
     def perform_move(self, coords : CoordPair) -> Tuple[bool,str]:
         """Validate and perform a movement or attack or repair or self-destruct expressed as a CoordPair.
         TODO: WRITE MISSING CODE!!!"""
@@ -416,6 +457,17 @@ class Game:
             self.mod_health(coords.src, -target_to_source_damage)
             self.mod_health(coords.dst, -source_to_target_damage)
 
+            return (True, "")
+
+        if self.is_valid_self_destruct(coords):
+            self.self_destruct_unit(coords.src)
+            return (True, "")
+
+        if self.is_valid_repair(coords):
+            src_unit = self.get(coords.src)
+            target_unit = self.get(coords.dst)
+
+            self.mod_health(coords.dst, +src_unit.repair_amount(target_unit))
             return (True, "")
 
         return (False,"invalid move")
