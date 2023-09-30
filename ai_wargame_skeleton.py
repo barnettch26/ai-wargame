@@ -445,14 +445,17 @@ class Game:
         TODO: WRITE MISSING CODE!!!"""
 
         if self.is_valid_movement(coords):
+            unit_name = self.get(coords.src).to_string()
             self.set(coords.dst,self.get(coords.src))
             self.set(coords.src,None)
 
-            return (True,"Moved {0} from {1} to {2}".format( self.get(coords.dst).to_string(), coords.src.to_string(), coords.dst.to_string() ))
+            return (True,"Moved {0} from {1} to {2}".format( unit_name, coords.src.to_string(), coords.dst.to_string() ))
 
         if self.is_valid_attack(coords):
             source_unit = self.get(coords.src)
             target_unit = self.get(coords.dst)
+            src_unit_name = source_unit.to_string()
+            target_unit_name = target_unit.to_string()
 
             source_to_target_damage = source_unit.damage_amount(target_unit)
             target_to_source_damage = target_unit.damage_amount(source_unit)
@@ -460,7 +463,7 @@ class Game:
             self.mod_health(coords.src, -target_to_source_damage)
             self.mod_health(coords.dst, -source_to_target_damage)
 
-            return (True, "Unit {0} at coordinate {1} attacked unit {2} at coordinate {3}".format( self.get(coords.src).to_string(), coords.src.to_string(), self.get(coords.dst).to_string(), coords.dst.to_string() ))
+            return (True, "Unit {0} at coordinate {1} attacked unit {2} at coordinate {3}".format( src_unit_name, coords.src.to_string(), target_unit_name, coords.dst.to_string() ))
 
         if self.is_valid_self_destruct(coords):
             unit_name = self.get(coords.src).to_string()
@@ -468,12 +471,13 @@ class Game:
             return (True, "Unit {0} at coordinate {1} self-destructed".format( unit_name, coords.src ))
 
         if self.is_valid_repair(coords):
+            src_unit_name = self.get(coords.src).to_string()
             target_unit_name = self.get(coords.dst).to_string()
             src_unit = self.get(coords.src)
             target_unit = self.get(coords.dst)
 
             self.mod_health(coords.dst, +src_unit.repair_amount(target_unit))
-            return (True, "Unit {0} at coordinate {1} repaired unit {2} at coordinate {3}".format( self.get(coords.src).to_string(), coords.src.to_string(), target_unit_name, coords.dst.to_string() ))
+            return (True, "Unit {0} at coordinate {1} repaired unit {2} at coordinate {3}".format( src_unit_name, coords.src.to_string(), target_unit_name, coords.dst.to_string() ))
 
         return (False,"invalid move")
 
