@@ -601,6 +601,10 @@ class Game:
                 return Player.Attacker    
         elif self._defender_has_ai:
             return Player.Defender
+        #In the situation where an both AIs kill each other, defender should win according to rules since
+        #according to End of game section, A player wins if their AI is alive while other AI is destroyed, else defender wins.
+        #This situation falls in the else
+        return Player.Defender
 
     def move_candidates(self) -> Iterable[CoordPair]:
         """Generate valid move candidates for the next player."""
