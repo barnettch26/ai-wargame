@@ -742,6 +742,7 @@ def main():
     parser.add_argument('--game_type', type=str, default="manual", help='game type: auto|attacker|defender|manual')
     parser.add_argument('--broker', type=str, help='play via a game broker')
     parser.add_argument('--max_turns', type=int, help='maximum number of turns allowed')
+    parser.add_argument('--alpha_beta', type=bool, action=argparse.BooleanOptionalAction, help='Toggle Alpha-Beta for AI')
     args = parser.parse_args()
 
     # parse the game type
@@ -766,6 +767,8 @@ def main():
         options.broker = args.broker
     if args.max_turns is not None:
         options.max_turns = args.max_turns
+    if args.alpha_beta is not None:
+        options.alpha_beta = args.alpha_beta
 
     # create a new game
     game = Game(options=options)
