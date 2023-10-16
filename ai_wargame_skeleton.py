@@ -222,7 +222,7 @@ class Options:
     min_depth : int | None = 2
     max_time : float | None = 5.0
     game_type : GameType = GameType.AttackerVsDefender
-    alpha_beta : bool = True
+    alpha_beta : bool = False
     max_turns : int | None = 100
     randomize_moves : bool = True
     broker : str | None = None
@@ -613,7 +613,10 @@ class Game:
             move.src = src
             for dst in src.iter_adjacent():
                 move.dst = dst
-                if self.is_valid_move(move):
+                if (self.is_valid_movement(move) or
+                        self.is_valid_attack(move) or
+                        self.is_valid_repair(move) or
+                        self.is_valid_self_destruct(move)):
                     yield move.clone()
             move.dst = src
             yield move.clone()
@@ -622,7 +625,20 @@ class Game:
         """Returns a random move."""
         move_candidates = list(self.move_candidates())
         random.shuffle(move_candidates)
+
+        bestHeuristicScore = MIN_HEURISTIC_SCORE
+        bestMove = None
+
         if len(move_candidates) > 0:
+            for move in move_candidates:
+                game_copy = self.clone()
+
+                game_copy.perform_move(move)
+
+                # print(move.src)
+                # print(move.dst)
+                # print(self.calculate_heuristic_e0(game_copy))
+                # print()
             return (0, move_candidates[0], 1)
         else:
             return (0, None, 0)
@@ -644,6 +660,78 @@ class Game:
             print(f"Eval perf.: {total_evals/self.stats.total_seconds/1000:0.1f}k/s")
         print(f"Elapsed time: {elapsed_seconds:0.1f}s")
         return move
+
+    def minimax(self, game: Game, depth: int, is_maximizing: bool) -> float:
+        if depth == game.options.max_depth or game.has_winner():
+            return self.calculate_heuristic_e0(game)
+
+        # TODO: NEED TO COMPLETE MINIMAX ALGO
+        return 1
+
+    def calculate_heuristic_e0(self, game: Game) -> float:
+        """e0 = (3VP1 + 3TP1 + 3FP1 + 3PP1 + 9999AIP1) − (3VP2 + 3TP2 + 3FP2 + 3PP2 + 9999AIP2)
+
+        where:
+
+        VPi = nb of Virus of Player i
+        TPi = nb of Tech of Player i
+        FPi = nb of Firewall of Player i
+        PPi = nb of Program of Player i
+        AIPi = nb of AI of Player i
+        """
+
+        nb_attacker_virus = 0
+        nb_attacker_tech = 0
+        nb_attacker_firewall = 0
+        nb_attacker_program = 0
+        nb_attacker_ai = 0
+
+        nb_defender_virus = 0
+        nb_defender_tech = 0
+        nb_defender_firewall = 0
+        nb_defender_program = 0
+        nb_defender_ai = 0
+
+        board_dimension = game.options.dim
+
+        for row in range(board_dimension):
+            for col in range(board_dimension):
+                coord = Coord(row,col)
+
+                unit = game.get(coord)
+
+                if unit is not None:
+                    if unit.player == Player.Attacker and unit.type == UnitType.Virus:
+                        nb_attacker_virus += 1
+                    elif unit.player == Player.Attacker and unit.type == UnitType.Tech:
+                        nb_attacker_tech += 1
+                    elif unit.player == Player.Attacker and unit.type == UnitType.Firewall:
+                        nb_attacker_firewall += 1
+                    elif unit.player == Player.Attacker and unit.type == UnitType.Program:
+                        nb_attacker_program += 1
+                    elif unit.player == Player.Attacker and unit.type == UnitType.AI:
+                        nb_attacker_ai += 1
+
+                    elif unit.player == Player.Defender and unit.type == UnitType.Virus:
+                        nb_defender_virus += 1
+                    elif unit.player == Player.Defender and unit.type == UnitType.Tech:
+                        nb_defender_tech += 1
+                    elif unit.player == Player.Defender and unit.type == UnitType.Firewall:
+                        nb_defender_firewall += 1
+                    elif unit.player == Player.Defender and unit.type == UnitType.Program:
+                        nb_defender_program += 1
+                    elif unit.player == Player.Defender and unit.type == UnitType.AI:
+                        nb_defender_ai += 1
+
+        attacker_heuristic_value = (3 * nb_attacker_virus + 3 * nb_attacker_tech + 3 * nb_attacker_firewall +
+                        3 * nb_attacker_program + 9999 * nb_attacker_ai)
+
+        defender_heuristic_value = (3 * nb_defender_virus + 3 * nb_defender_tech + 3 * nb_defender_firewall +
+                        3 * nb_defender_program + 9999 * nb_defender_ai)
+
+        heuristic_value = attacker_heuristic_value - defender_heuristic_value
+
+        return heuristic_value
 
     def post_move_to_broker(self, move: CoordPair):
         """Send a move to the game broker."""
