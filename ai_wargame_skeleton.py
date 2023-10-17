@@ -606,10 +606,10 @@ class Game:
         #This situation falls in the else
         return Player.Defender
 
-    def move_candidates(self) -> Iterable[CoordPair]:
+    def move_candidates(self, player: Player) -> Iterable[CoordPair]:
         """Generate valid move candidates for the next player."""
         move = CoordPair()
-        for (src,_) in self.player_units(self.next_player):
+        for (src,_) in self.player_units(player):
             move.src = src
             for dst in src.iter_adjacent():
                 move.dst = dst
@@ -621,36 +621,23 @@ class Game:
             move.dst = src
             yield move.clone()
 
-    def random_move(self) -> Tuple[int, CoordPair | None, float]:
-        """Returns a random move."""
-        move_candidates = list(self.move_candidates())
-        random.shuffle(move_candidates)
+    def find_best_move(self) -> Tuple[float, CoordPair | None, float]:
+        """Returns the best possible move by recursively calling the minimax or alpha-beta algorithms."""
+        best_heuristic_score, best_move = self.minimax(self, 0, self.next_player == Player.Attacker)
+        # print("Best heuristic score: ", best_heuristic_score)
+        # print("Best move: ", best_move)
 
-        bestHeuristicScore = MIN_HEURISTIC_SCORE
-        bestMove = None
-
-        if len(move_candidates) > 0:
-            for move in move_candidates:
-                game_copy = self.clone()
-
-                game_copy.perform_move(move)
-
-                # print(move.src)
-                # print(move.dst)
-                # print(self.calculate_heuristic_e0(game_copy))
-                # print()
-            return (0, move_candidates[0], 1)
-        else:
-            return (0, None, 0)
+        return (best_heuristic_score, best_move, 1)
+        # else:
+        #     return (0, None, 0)
 
     def suggest_move(self) -> CoordPair | None:
         """Suggest the next move using minimax alpha beta. TODO: REPLACE RANDOM_MOVE WITH PROPER GAME LOGIC!!!"""
         start_time = datetime.now()
-        (score, move, avg_depth) = self.random_move()
+        (score, move, avg_depth) = self.find_best_move()
         elapsed_seconds = (datetime.now() - start_time).total_seconds()
         self.stats.total_seconds += elapsed_seconds
         print(f"Heuristic score: {score}")
-        print(f"Average recursive depth: {avg_depth:0.1f}")
         print(f"Evals per depth: ",end='')
         for k in sorted(self.stats.evaluations_per_depth.keys()):
             print(f"{k}:{self.stats.evaluations_per_depth[k]} ",end='')
@@ -661,14 +648,43 @@ class Game:
         print(f"Elapsed time: {elapsed_seconds:0.1f}s")
         return move
 
-    def minimax(self, game: Game, depth: int, is_maximizing: bool) -> float:
+    def minimax(self, game: Game, depth: int, is_maximizing_player: bool) -> Tuple[float, CoordPair | None]:
         if depth == game.options.max_depth or game.has_winner():
-            return self.calculate_heuristic_e0(game)
+            return game.calculate_heuristic_e0(), None
 
-        # TODO: NEED TO COMPLETE MINIMAX ALGO
-        return 1
+        if is_maximizing_player:
+            max_score = MIN_HEURISTIC_SCORE
+            best_move = None
 
-    def calculate_heuristic_e0(self, game: Game) -> float:
+            for move in list(game.move_candidates(Player.Attacker)):
+                game_copy = game.clone()
+                game_copy.perform_move(move)
+
+                score = self.minimax(game_copy, depth + 1, False)[0]
+
+                max_score = max(score, max_score)
+                if max_score == score:
+                    best_move = move
+
+            return max_score, best_move
+
+        else:
+            min_score = MAX_HEURISTIC_SCORE
+            best_move = None
+
+            for move in list(game.move_candidates(Player.Defender)):
+                game_copy = game.clone()
+                game_copy.perform_move(move)
+
+                score = self.minimax(game_copy, depth + 1, True)[0]
+
+                min_score = min(score, min_score)
+                if min_score == score:
+                    best_move = move
+
+            return min_score, best_move
+
+    def calculate_heuristic_e0(self) -> float:
         """e0 = (3VP1 + 3TP1 + 3FP1 + 3PP1 + 9999AIP1) − (3VP2 + 3TP2 + 3FP2 + 3PP2 + 9999AIP2)
 
         where:
@@ -692,13 +708,13 @@ class Game:
         nb_defender_program = 0
         nb_defender_ai = 0
 
-        board_dimension = game.options.dim
+        board_dimension = self.options.dim
 
         for row in range(board_dimension):
             for col in range(board_dimension):
                 coord = Coord(row,col)
 
-                unit = game.get(coord)
+                unit = self.get(coord)
 
                 if unit is not None:
                     if unit.player == Player.Attacker and unit.type == UnitType.Virus:
