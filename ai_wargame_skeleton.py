@@ -39,6 +39,11 @@ class GameType(Enum):
     CompVsDefender = 2
     CompVsComp = 3
 
+class Heuristic(Enum):
+    E0 = 0
+    E1 = 1
+    E2 = 2
+
 ##############################################################################################################
 
 @dataclass(slots=True)
@@ -226,6 +231,7 @@ class Options:
     max_turns : int | None = 100
     randomize_moves : bool = True
     broker : str | None = None
+    heuristic: Heuristic | None = Heuristic.E0
 
 ##############################################################################################################
 
@@ -568,7 +574,7 @@ class Game:
 
     def computer_turn(self) -> CoordPair | None:
         """Computer plays a move."""
-        mv = self.suggest_move()
+        mv = self.find_best_computer_move()
         if mv is not None:
             (success,result) = self.perform_move(mv)
             if success:
@@ -621,20 +627,12 @@ class Game:
             move.dst = src
             yield move.clone()
 
-    def find_best_move(self) -> Tuple[float, CoordPair | None, float]:
-        """Returns the best possible move by recursively calling the minimax or alpha-beta algorithms."""
-        best_heuristic_score, best_move = self.minimax(self, 0, self.next_player == Player.Attacker)
-        # print("Best heuristic score: ", best_heuristic_score)
-        # print("Best move: ", best_move)
-
-        return (best_heuristic_score, best_move, 1)
-        # else:
-        #     return (0, None, 0)
-
-    def suggest_move(self) -> CoordPair | None:
+    def find_best_computer_move(self) -> CoordPair | None:
         """Suggest the next move using minimax alpha beta. TODO: REPLACE RANDOM_MOVE WITH PROPER GAME LOGIC!!!"""
         start_time = datetime.now()
-        (score, move, avg_depth) = self.find_best_move()
+
+        (score, move) = self.minimax(self, 0, self.next_player == Player.Attacker, start_time)
+
         elapsed_seconds = (datetime.now() - start_time).total_seconds()
         self.stats.total_seconds += elapsed_seconds
         print(f"Heuristic score: {score}")
@@ -648,9 +646,10 @@ class Game:
         print(f"Elapsed time: {elapsed_seconds:0.1f}s")
         return move
 
-    def minimax(self, game: Game, depth: int, is_maximizing_player: bool) -> Tuple[float, CoordPair | None]:
-        if depth == game.options.max_depth or game.has_winner():
-            return game.calculate_heuristic_e0(), None
+    def minimax(self, game: Game, depth: int, is_maximizing_player: bool, start_time: datetime) -> Tuple[float, CoordPair | None]:
+        if depth == game.options.max_depth or game.has_winner() or ((datetime.now() - start_time).seconds >= game.options.max_time):
+            if game.options.heuristic == Heuristic.E0:
+                return game.calculate_heuristic_e0(), None
 
         if is_maximizing_player:
             max_score = MIN_HEURISTIC_SCORE
@@ -660,11 +659,14 @@ class Game:
                 game_copy = game.clone()
                 game_copy.perform_move(move)
 
-                score = self.minimax(game_copy, depth + 1, False)[0]
+                score = self.minimax(game_copy, depth + 1, False, start_time)[0]
 
                 max_score = max(score, max_score)
                 if max_score == score:
                     best_move = move
+
+                if (datetime.now() - start_time).seconds >= game.options.max_time:
+                    break
 
             return max_score, best_move
 
@@ -676,11 +678,14 @@ class Game:
                 game_copy = game.clone()
                 game_copy.perform_move(move)
 
-                score = self.minimax(game_copy, depth + 1, True)[0]
+                score = self.minimax(game_copy, depth + 1, True, start_time)[0]
 
                 min_score = min(score, min_score)
                 if min_score == score:
                     best_move = move
+
+                if (datetime.now() - start_time).seconds >= game.options.max_time:
+                    break
 
             return min_score, best_move
 
@@ -806,15 +811,15 @@ class Game:
         if self.options.game_type == GameType.AttackerVsComp:
             file.write("    c) Alpha-Beta: {0}\n".format( self.options.alpha_beta ))
             file.write("    d) Play Mode: Attacker = Human | Defender = AI\n")
-            file.write("    e) Heuristic: TODO\n")
+            file.write("    e) Heuristic: {0}\n".format( self.options.heuristic.name))
         elif self.options.game_type == GameType.CompVsDefender:
             file.write("    c) Alpha-Beta: {0}\n".format(self.options.alpha_beta))
             file.write("    d) Play Mode: Attacker = AI | Defender = Human\n")
-            file.write("    e) Heuristic: TODO\n")
+            file.write("    e) Heuristic: {0}\n".format( self.options.heuristic.name))
         elif self.options.game_type == GameType.CompVsComp:
             file.write("    c) Alpha-Beta: {0}\n".format(self.options.alpha_beta))
             file.write("    d) Play Mode: Attacker = AI | Defender = AI\n")
-            file.write("    e) Heuristic: TODO\n")
+            file.write("    e) Heuristic: {0}\n".format( self.options.heuristic.name))
         else:
             file.write("    c) Alpha-Beta: No AI in this game.\n")
             file.write("    d) Play Mode: Attacker = Human | Defender = Human\n")
@@ -828,6 +833,9 @@ class Game:
         file.write("Turn Number: {0}\n".format(self.turns_played+1))
         file.write("Player: {0}\n".format(self.next_player.name))
         file.write("Action: {0}\n".format(move_string))
+
+        #TODO: More outputs for AI information and cumulative statistics
+
         file.write(self.board_to_string())
 
     def update_output_file_end(self, winner):
@@ -847,6 +855,8 @@ def main():
     parser.add_argument('--broker', type=str, help='play via a game broker')
     parser.add_argument('--max_turns', type=int, help='maximum number of turns allowed')
     parser.add_argument('--alpha_beta', type=bool, action=argparse.BooleanOptionalAction, help='Toggle Alpha-Beta for AI')
+    parser.add_argument('--heuristic', type=str, default="e0", help="heuristic that an AI should use: e0 | e1 | e2")
+
     args = parser.parse_args()
 
     # parse the game type
@@ -859,8 +869,17 @@ def main():
     else:
         game_type = GameType.CompVsComp
 
+    heuristic = None
+
+    if args.heuristic == "e0":
+        heuristic = Heuristic.E0
+    elif args.heuristic == "e1":
+        heuristic = Heuristic.E1
+    elif args.heuristic == "e2":
+        heuristic = Heuristic.E2
+
     # set up game options
-    options = Options(game_type=game_type)
+    options = Options(game_type=game_type, heuristic=heuristic)
 
     # override class defaults via command line options
     if args.max_depth is not None:
