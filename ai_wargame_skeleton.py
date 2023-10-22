@@ -757,16 +757,6 @@ class Game:
         return heuristic_value
 
     def calculate_heuristic_e1(self) -> float:
-        nb_attacker_virus = 0
-        nb_attacker_firewall = 0
-        nb_attacker_program = 0
-        nb_attacker_ai = 0
-
-        nb_defender_tech = 0
-        nb_defender_firewall = 0
-        nb_defender_program = 0
-        nb_defender_ai = 0
-
         total_health_attacker_virus = 0
         total_health_attacker_firewall = 0
         total_health_attacker_program = 0
@@ -788,39 +778,31 @@ class Game:
                 if unit is not None:
                     # Attacker units
                     if unit.player == Player.Attacker and unit.type == UnitType.Virus:
-                        nb_attacker_virus += 1
                         total_health_attacker_virus += unit.health
                     elif unit.player == Player.Attacker and unit.type == UnitType.Firewall:
-                        nb_attacker_firewall += 1
                         total_health_attacker_firewall += unit.health
                     elif unit.player == Player.Attacker and unit.type == UnitType.Program:
-                        nb_attacker_program += 1
                         total_health_attacker_program += unit.health
                     elif unit.player == Player.Attacker and unit.type == UnitType.AI:
-                        nb_attacker_ai += 1
                         total_health_attacker_ai += unit.health
 
                     # Defender units
                     elif unit.player == Player.Defender and unit.type == UnitType.Tech:
-                        nb_defender_tech += 1
                         total_health_defender_tech += unit.health
                     elif unit.player == Player.Defender and unit.type == UnitType.Firewall:
-                        nb_defender_firewall += 1
                         total_health_defender_firewall += unit.health
                     elif unit.player == Player.Defender and unit.type == UnitType.Program:
-                        nb_defender_program += 1
                         total_health_defender_program += unit.health
                     elif unit.player == Player.Defender and unit.type == UnitType.AI:
-                        nb_defender_ai += 1
                         total_health_defender_ai += unit.health
                         # Check if there are any viruses adjacent to AI
 
         # TODO: Add number of viruses adjacent to defender's AI
-        attacker_heuristic_value = (15 * nb_attacker_virus * total_health_attacker_virus + 2 * total_health_attacker_program
+        attacker_heuristic_value = (100 * total_health_attacker_virus + 2 * total_health_attacker_program
                                     + 2 * total_health_attacker_firewall + 999 * total_health_attacker_ai)
 
         defender_heuristic_value = (5 * total_health_defender_tech + 5 * total_health_defender_firewall
-                                    + 2 * total_health_defender_program + 999 * total_health_defender_ai)
+                                    + 2 * total_health_defender_program + 9999 * total_health_defender_ai)
 
         heuristic_value = attacker_heuristic_value - defender_heuristic_value
 
