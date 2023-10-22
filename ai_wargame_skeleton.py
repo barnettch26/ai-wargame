@@ -874,8 +874,8 @@ class Game:
                         total_health_defender_ai += unit.health
 
         # TODO: Add number of viruses adjacent to defender's AI
-        attacker_heuristic_value = (100 * total_health_attacker_virus + 2 * total_health_attacker_program
-                                    + 2 * total_health_attacker_firewall + 999 * total_health_attacker_ai)
+        attacker_heuristic_value = (60 * total_health_attacker_virus + 2 * total_health_attacker_program
+                                    + 2 * total_health_attacker_firewall + 9999 * total_health_attacker_ai)
 
         defender_heuristic_value = (5 * total_health_defender_tech + 5 * total_health_defender_firewall
                                     + 2 * total_health_defender_program + 9999 * total_health_defender_ai)
