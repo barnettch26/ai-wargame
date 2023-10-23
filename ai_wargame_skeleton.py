@@ -648,7 +648,8 @@ class Game:
         start_time = datetime.now()
 
         if self.options.alpha_beta:
-            (score, move) = self.minimax_alpha_beta(self, 0, float('-inf'), float('inf'), self.next_player == Player.Attacker, start_time)
+            (score, move) = self.minimax_alpha_beta(self, 0, float('-inf'), float('inf'),
+                                                    self.next_player == Player.Attacker, start_time)
         else:
             (score, move) = self.minimax(self, 0, self.next_player == Player.Attacker, start_time)
 
@@ -673,6 +674,8 @@ class Game:
                 return game.calculate_heuristic_e0(), None
             elif game.options.heuristic == Heuristic.E1:
                 return game.calculate_heuristic_e1(), None
+            elif game.options.heuristic == Heuristic.E2:
+                return game.calculate_heuristic_e2(), None
 
         if is_maximizing_player:
             max_score = MIN_HEURISTIC_SCORE
@@ -721,6 +724,8 @@ class Game:
                 return game.calculate_heuristic_e0(), None
             elif game.options.heuristic == Heuristic.E1:
                 return game.calculate_heuristic_e1(), None
+            elif game.options.heuristic == Heuristic.E2:
+                return game.calculate_heuristic_e2(), None
 
         if is_maximizing_player:
             max_score = MIN_HEURISTIC_SCORE
@@ -883,6 +888,147 @@ class Game:
         heuristic_value = attacker_heuristic_value - defender_heuristic_value
 
         return heuristic_value
+
+    def calculate_heuristic_e2(self) -> float:
+        # variables for Attacker heuristic
+        attacker_ai_hp = 0
+        attacker_ai_alive = 0
+
+        attacker_virus_hp = 0
+        attacker_virus_vs_ai = 0
+        attacker_virus_vs_program = 0
+
+        attacker_program_hp = 0
+        attacker_program_vs_ai = 0
+        attacker_program_vs_tech = 0
+        attacker_program_vs_program = 0
+
+        attacker_firewall_hp = 0
+        attacker_firewall_vs_tech = 0
+        attacker_firewall_vs_program = 0
+        attacker_firewall_vs_ai = 0
+
+        # variables for Defender heuristic
+        defender_ai_hp = 0
+        defender_ai_alive = 0
+
+        defender_tech_hp = 0
+        defender_tech_vs_virus = 0
+        defender_tech_repair_ai = 0
+        defender_tech_repair_program = 0
+        defender_tech_repair_firewall = 0
+
+        defender_firewall_hp = 0
+        defender_firewall_vs_virus = 0
+        defender_firewall_vs_program = 0
+        defender_firewall_vs_ai = 0
+
+        defender_program_hp = 0
+        defender_program_vs_ai = 0
+        defender_program_vs_program = 0
+        defender_program_vs_virus = 0
+
+        board_dim = self.options.dim
+        for row in range(board_dim):
+            for col in range(board_dim):
+                coord = Coord(row, col)
+                unit = self.get(coord)
+
+                if unit is None:
+                    continue
+
+                if unit.player == Player.Attacker:
+                    if unit.type == UnitType.AI:
+                        attacker_ai_hp += unit.health
+                        attacker_ai_alive = 1
+
+                    elif unit.type == UnitType.Virus:
+                        attacker_virus_hp += unit.health
+
+                        adjacent_coords = coord.iter_adjacent()
+                        if self.target_in_coordinates(adjacent_coords, UnitType.AI, Player.Defender, False):
+                            attacker_virus_vs_ai += 1
+                        if self.target_in_coordinates(adjacent_coords, UnitType.Program, Player.Defender, False):
+                            attacker_virus_vs_program += 1
+
+                    elif unit.type == UnitType.Program:
+                        attacker_program_hp += unit.health
+
+                        adjacent_coords = coord.iter_adjacent()
+                        if self.target_in_coordinates(adjacent_coords, UnitType.AI, Player.Defender, False):
+                            attacker_program_vs_ai += 1
+                        if self.target_in_coordinates(adjacent_coords, UnitType.Tech, Player.Defender, False):
+                            attacker_program_vs_tech += 1
+                        if self.target_in_coordinates(adjacent_coords, UnitType.Program, Player.Defender, False):
+                            attacker_program_vs_program += 1
+
+                    elif unit.type == UnitType.Firewall:
+                        attacker_firewall_hp += unit.health
+
+                        adjacent_coords = coord.iter_adjacent()
+                        if self.target_in_coordinates(adjacent_coords, UnitType.Tech, Player.Defender, False):
+                            attacker_firewall_vs_tech += 1
+                        if self.target_in_coordinates(adjacent_coords, UnitType.Program, Player.Defender, False):
+                            attacker_firewall_vs_program += 1
+                        if self.target_in_coordinates(adjacent_coords, UnitType.AI, Player.Defender, False):
+                            attacker_firewall_vs_ai += 1
+
+                elif unit.player == Player.Defender:
+                    if unit.type == UnitType.AI:
+                        defender_ai_hp += unit.health
+                        defender_ai_alive = 1
+
+                    elif unit.type == UnitType.Tech:
+                        defender_tech_hp += unit.health
+
+                        adjacent_coords = coord.iter_adjacent()
+                        if self.target_in_coordinates(adjacent_coords, UnitType.Virus, Player.Attacker, False):
+                            defender_tech_vs_virus += 1
+                        if self.target_in_coordinates(adjacent_coords, UnitType.AI, Player.Defender, True):
+                            defender_tech_repair_ai += 1
+                        if self.target_in_coordinates(adjacent_coords, UnitType.Program, Player.Defender, True):
+                            defender_tech_repair_program += 1
+                        if self.target_in_coordinates(adjacent_coords, UnitType.Firewall, Player.Defender, True):
+                            defender_tech_repair_firewall += 1
+
+                    elif unit.type == UnitType.Firewall:
+                        defender_firewall_hp += unit.health
+
+                        adjacent_coords = coord.iter_adjacent()
+                        if self.target_in_coordinates(adjacent_coords, UnitType.Virus, Player.Attacker, False):
+                            defender_firewall_vs_virus += 1
+                        if self.target_in_coordinates(adjacent_coords, UnitType.Program, Player.Attacker, False):
+                            defender_firewall_vs_program += 1
+                        if self.target_in_coordinates(adjacent_coords, UnitType.AI, Player.Attacker, False):
+                            defender_firewall_vs_ai += 1
+
+                    elif unit.type == UnitType.Program:
+                        defender_program_hp += unit.health
+
+                        adjacent_coords = coord.iter_adjacent()
+                        if self.target_in_coordinates(adjacent_coords, UnitType.AI, Player.Attacker, False):
+                            defender_program_vs_ai += 1
+                        if self.target_in_coordinates(adjacent_coords, UnitType.Program, Player.Attacker, False):
+                            defender_program_vs_program += 1
+                        if self.target_in_coordinates(adjacent_coords, UnitType.Virus, Player.Attacker, False):
+                            defender_program_vs_virus += 1
+
+        attacker_heuristic = 9999 * attacker_ai_alive * 100 * attacker_ai_hp + 60 * attacker_virus_hp + 250 * attacker_virus_vs_ai + 30 * attacker_virus_vs_program + 35 * attacker_program_hp + 150 * attacker_program_vs_ai + 80 * attacker_program_vs_tech + 30 * attacker_program_vs_program + 30 * attacker_firewall_hp + 40 * attacker_firewall_vs_tech + 50 * attacker_firewall_vs_program + 90 * attacker_firewall_vs_ai
+        defender_heuristic = 9999 * defender_ai_alive * 100 * defender_ai_hp + 50 * defender_tech_hp + 80 * defender_tech_vs_virus + 80 * defender_tech_repair_ai + 35 * defender_tech_repair_program + 30 * defender_tech_repair_firewall + 30 * defender_firewall_hp + 40 * defender_firewall_vs_virus + 50 * defender_firewall_vs_program + 90 * defender_firewall_vs_ai + 35 * defender_program_hp + 150 * defender_program_vs_ai + 30 * defender_program_vs_program + 30 * defender_program_vs_virus
+        total_heuristic = attacker_heuristic - defender_heuristic
+
+        return total_heuristic
+
+    def target_in_coordinates(self, coords: Iterable[Coord], target: UnitType, targetOwner: Player,
+                              check_damaged: bool) -> bool:
+        for coord in coords:
+            unit = self.get(coord)
+            if unit.type == target and unit.player == targetOwner:
+                if check_damaged and unit.health == 9:
+                    return False
+                return True
+
+        return False
 
     def post_move_to_broker(self, move: CoordPair):
         """Send a move to the game broker."""
