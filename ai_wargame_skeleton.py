@@ -1023,6 +1023,9 @@ class Game:
                               check_damaged: bool) -> bool:
         for coord in coords:
             unit = self.get(coord)
+            if unit is None:
+                continue
+
             if unit.type == target and unit.player == targetOwner:
                 if check_damaged and unit.health == 9:
                     return False
