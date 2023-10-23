@@ -263,6 +263,8 @@ class Game:
     stats: Stats = field(default_factory=Stats)
     _attacker_has_ai: bool = True
     _defender_has_ai: bool = True
+    cummulative_evals = []
+    branching_factor_arr = []
 
     def __post_init__(self):
         """Automatically called after class init to set up the default board state."""
@@ -281,6 +283,10 @@ class Game:
         self.set(Coord(md - 2, md), Unit(player=Player.Attacker, type=UnitType.Program))
         self.set(Coord(md, md - 2), Unit(player=Player.Attacker, type=UnitType.Program))
         self.set(Coord(md - 1, md - 1), Unit(player=Player.Attacker, type=UnitType.Firewall))
+
+        # generate array counter for evals at each depth
+        for i in range(self.options.max_depth):
+            self.cummulative_evals.append(0)
 
         # Create initial output file here
         self.create_output_file()
@@ -590,13 +596,13 @@ class Game:
 
     def computer_turn(self) -> CoordPair | None:
         """Computer plays a move."""
-        mv = self.find_best_computer_move()
+        (mv, heuristic_score, elapsed_time) = self.find_best_computer_move()
         if mv is not None:
             (success, result) = self.perform_move(mv)
             if success:
                 print(f"Computer {self.next_player.name}: ", end='')
                 print(result)
-                self.update_output_file_turn(result)
+                self.update_output_file_turn_ai(result, heuristic_score, elapsed_time)
                 # TODO: print AI specific stuff
                 self.next_turn()
         return mv
@@ -643,10 +649,11 @@ class Game:
             move.dst = src
             yield move.clone()
 
-    def find_best_computer_move(self) -> CoordPair | None:
+    def find_best_computer_move(self) -> Tuple[CoordPair, float, float] | None:
         """Suggest the next move using minimax alpha beta. TODO: REPLACE RANDOM_MOVE WITH PROPER GAME LOGIC!!!"""
         start_time = datetime.now()
 
+        self.branching_factor_arr.clear()
         if self.options.alpha_beta:
             (score, move) = self.minimax_alpha_beta(self, 0, float('-inf'), float('inf'),
                                                     self.next_player == Player.Attacker, start_time)
@@ -656,18 +663,25 @@ class Game:
         elapsed_seconds = (datetime.now() - start_time).total_seconds()
         self.stats.total_seconds += elapsed_seconds
         print(f"Heuristic score: {score}")
-        print(f"Evals per depth: ", end='')
-        for k in sorted(self.stats.evaluations_per_depth.keys()):
-            print(f"{k}:{self.stats.evaluations_per_depth[k]} ", end='')
-        print()
-        total_evals = sum(self.stats.evaluations_per_depth.values())
-        if self.stats.total_seconds > 0:
-            print(f"Eval perf.: {total_evals / self.stats.total_seconds / 1000:0.1f}k/s")
         print(f"Elapsed time: {elapsed_seconds:0.1f}s")
-        return move
+        sum = self.sum_array(self.cummulative_evals)
+        print("Cummulative Evals: {0}".format(sum))
+        print("Cummulative Evals by Depth:")
+        for i in range(len(self.cummulative_evals)):
+            print("    {0}= {1}".format(i + 1, self.cummulative_evals[i]))
+        print("Cummulative % Evals by Depth:")
+        for i in range(len(self.cummulative_evals)):
+            print("    {0}= {1}%".format(i + 1, self.cummulative_evals[i] / sum * 100))
+        print("Average branching factor: {0}\n".format(self.sum_array(self.branching_factor_arr) / len(
+            self.branching_factor_arr)))
+
+        return (move, score, elapsed_seconds)
 
     def minimax(self, game: Game, depth: int, is_maximizing_player: bool, start_time: datetime) -> Tuple[
         float, CoordPair | None]:
+        if depth != 0:
+            self.cummulative_evals[depth - 1] += 1
+
         if depth == game.options.max_depth or game.has_winner() or (
                 (datetime.now() - start_time).seconds >= game.options.max_time):
             if game.options.heuristic == Heuristic.E0:
@@ -681,7 +695,10 @@ class Game:
             max_score = MIN_HEURISTIC_SCORE
             best_move = None
 
-            for move in list(game.move_candidates(Player.Attacker)):
+            moves = list(game.move_candidates(Player.Attacker))
+            self.branching_factor_arr.append(len(moves))
+
+            for move in moves:
                 game_copy = game.clone()
                 game_copy.perform_move(move)
 
@@ -700,7 +717,9 @@ class Game:
             min_score = MAX_HEURISTIC_SCORE
             best_move = None
 
-            for move in list(game.move_candidates(Player.Defender)):
+            moves = list(game.move_candidates(Player.Defender))
+            self.branching_factor_arr.append(len(moves))
+            for move in moves:
                 game_copy = game.clone()
                 game_copy.perform_move(move)
 
@@ -718,6 +737,9 @@ class Game:
     # Minimax with alpha beta pruning.
     def minimax_alpha_beta(self, game: Game, depth: int, alpha: float, beta: float, is_maximizing_player: bool,
                            start_time: datetime) -> Tuple[float, CoordPair | None]:
+        if depth != 0:
+            self.cummulative_evals[depth - 1] += 1
+
         if depth == game.options.max_depth or game.has_winner() or (
                 (datetime.now() - start_time).seconds >= game.options.max_time):
             if game.options.heuristic == Heuristic.E0:
@@ -731,7 +753,10 @@ class Game:
             max_score = MIN_HEURISTIC_SCORE
             best_move = None
 
-            for move in list(game.move_candidates(Player.Attacker)):
+            moves = list(game.move_candidates(Player.Attacker))
+            self.branching_factor_arr.append(len(moves))
+
+            for move in moves:
                 game_copy = game.clone()
                 game_copy.perform_move(move)
 
@@ -754,7 +779,10 @@ class Game:
             min_score = MAX_HEURISTIC_SCORE
             best_move = None
 
-            for move in list(game.move_candidates(Player.Defender)):
+            moves = list(game.move_candidates(Player.Defender))
+            self.branching_factor_arr.append(len(moves))
+
+            for move in moves:
                 game_copy = game.clone()
                 game_copy.perform_move(move)
 
@@ -1116,10 +1144,37 @@ class Game:
         file.write("Turn Number: {0}\n".format(self.turns_played + 1))
         file.write("Player: {0}\n".format(self.next_player.name))
         file.write("Action: {0}\n".format(move_string))
+        file.write(self.board_to_string())
 
-        # TODO: More outputs for AI information and cumulative statistics
+    def update_output_file_turn_ai(self, move_string, heuristic_score, elapsed_time):
+        file = open(
+            'gameTrace-{0}-{1}-{2}.txt'.format(self.options.alpha_beta, self.options.max_time, self.options.max_turns),
+            "a")
+        file.write("\n\n\n")
+        file.write("Turn Number: {0}\n".format(self.turns_played + 1))
+        file.write("Player: {0}\n".format(self.next_player.name))
+        file.write("Action: {0}\n".format(move_string))
+        file.write("Time for Action: {0}s\n".format(elapsed_time))
+        file.write("Heuristic score: {0}\n".format(heuristic_score))
+        file.write("\n")
+        sum = self.sum_array(self.cummulative_evals)
+        file.write("Cummulative Evals: {0}\n".format(sum))
+        file.write("Cummulative Evals by Depth:\n")
+        for i in range(len(self.cummulative_evals)):
+            file.write("    {0}= {1}\n".format(i + 1, self.cummulative_evals[i]))
+        file.write("Cummulative % Evals by Depth:\n")
+        for i in range(len(self.cummulative_evals)):
+            file.write("    {0}= {1}%\n".format(i + 1, self.cummulative_evals[i] / sum * 100))
+        file.write("Average branching factor: {0}\n".format(self.sum_array(self.branching_factor_arr) / len(
+            self.branching_factor_arr)))
 
         file.write(self.board_to_string())
+
+    def sum_array(self, arr):
+        sum = 0
+        for i in range(len(arr)):
+            sum += arr[i]
+        return sum
 
     def update_output_file_end(self, winner):
         file = open(
